@@ -15,12 +15,14 @@ import matplotlib.pyplot as plt
 # plt.savefig("output1.png", dpi=200, bbox_inches="tight")
 
 # model = YOLO("runs/detect/yolov8n_football/weights/last.pt")
-model = YOLO("player_detect.pt")
+# model = YOLO("/work/player_detect_Friend.pt")
+# model = YOLO("/work/turbovision/results/best_yolov8n.pt")
+model = YOLO("/work/turbovision/results/best_yolov8s.pt")
 
-model.val(data="soccer-1/data.yaml", device="cuda")
+model.val(data="/work/Dataset/Football-player-Detection-4/data.yaml", device="cuda")
 
-results = model("test.jpg", conf=0.3, device="cuda")
-results[0].show()
+# results = model("test.jpg", conf=0.3, device="cuda")
+# results[0].show()
 
 # annotated_image = results[0].plot()
 
