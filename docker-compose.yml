@@ -1,0 +1,114 @@
+x-common: &common #
+  image: docker.io/mikhaelscore/turbovision:latest
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  mem_reservation: "6g"
+  mem_limit: "8g"
+  stop_grace_period: 30s
+  stop_signal: SIGTERM
+  labels:
+    - "com.centurylinklabs.watchtower.enable=true"
+
+services:
+  validator:
+    <<: *common
+    container_name: scorevision-validator
+    environment:
+      SCOREVISION_CACHE_DIR: /app/data/blocks
+      SIGNER_URL: http://signer:8080
+      SCOREVISION_METRICS_ADDR: 0.0.0.0
+      SCOREVISION_METRICS_PORT: 8110
+      USE_PROMETHEUS: "true"
+      MALLOC_ARENA_MAX: "2"
+      PYTHONMALLOC: "malloc"
+    volumes:
+      - validator-cache:/app/data/blocks
+      - ${HOME}/.bittensor/wallets:/root/.bittensor/wallets:ro
+    ports:
+      - "8011:8000"
+      - "8110:8110"
+    depends_on:
+      signer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8110/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: ["sv", "-v", "validate"]
+
+  runner:
+    <<: *common
+    container_name: scorevision-runner
+    environment:
+      SCOREVISION_METRICS_PORT: "8000"
+      SCOREVISION_METRICS_ADDR: 0.0.0.0
+      SIGNER_URL: http://signer:8080
+      MALLOC_ARENA_MAX: "2"
+      PYTHONMALLOC: "malloc"
+    volumes:
+      - ${HOME}/.chutes:/root/.chutes:ro
+      - ${HOME}/.bittensor/wallets:/root/.bittensor/wallets:ro
+    ports:
+      - "8012:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    command: ["sv", "-v", "runner"]
+
+  signer:
+    <<: *common
+    container_name: scorevision-signer
+    environment:
+      SIGNER_HOST: 0.0.0.0
+      SIGNER_PORT: "8080"
+      MALLOC_ARENA_MAX: "2"
+      PYTHONMALLOC: "malloc"
+    volumes:
+      - ${HOME}/.bittensor/wallets:/root/.bittensor/wallets:ro
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: ["sv", "-v", "signer"]
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: scorevision-prometheus
+    restart: unless-stopped
+    ports:
+      - "9191:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--storage.tsdb.retention.time=200h"
+      - "--web.enable-lifecycle"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: scorevision-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_POLL_INTERVAL: "60"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+
+volumes:
+  validator-cache:
+  prometheus-data:
